@@ -1,0 +1,114 @@
+service:
+  name: prototype
+
+plugins:
+  - serverless-webpack
+  # - serverless-offline-dynamodb-streams
+  - serverless-appsync-simulator
+  - serverless-s3-local
+  - serverless-offline
+  # - serverless-dynamodb-local
+  - serverless-offline-sns
+  - serverless-appsync-plugin
+  - serverless-pseudo-parameters
+  - serverless-plugin-split-stacks
+  - serverless-step-functions
+  - serverless-prune-plugin
+custom:
+  serverless-offline:
+    port: 3002
+    httpPort: 3003
+  appsync-simulator:
+    location: ".webpack/service"
+    apiKey: "da2-fakeApiId123456"
+    watch: false
+  dynamodb:
+    stages:
+      - dev
+      - local
+    start:
+      port: 8000
+      inMemory: true
+      migrate: true
+      seed: true
+      noStart: ${opt:nojava,false}
+  serverless-offline-dynamodb-streams:
+    apiVersion: "2013-12-02"
+    endpoint: http://localhost:8000
+    region: ap-northeast-1
+    accessKeyId: root
+    secretAccessKey: root
+    skipCacheInvalidation: false
+    readInterval: 500
+  appSync:
+    - name: prototype${opt:stage}
+      authenticationType: AMAZON_COGNITO_USER_POOLS
+      additionalAuthenticationProviders:
+        - authenticationType: AWS_IAM
+      userPoolConfig:
+        awsRegion: ap-northeast-1
+        userPoolId: !Ref ClinicUserPool
+        defaultAction: ALLOW
+      defaultMappingTemplates: # default templates. Useful for Lambda templates that are often repetitive. Will be used if the template is not specified in a resolver
+        request: default.request.template.vtl # or, e.g: false for Direct lambdas
+        response: default.response.template.vtl # or e.g.: false for Direct lambdas
+      mappingTemplatesLocation: graphql
+      schema: graphql/schema.graphql
+      dataSources:
+        - type: AWS_LAMBDA
+          name: graphql
+          config:
+            functionName: graphql
+      mappingTemplates:
+        - dataSource: graphql
+          type: Query
+          field: info
+        - dataSource: graphql
+          type: Composite
+          field: child
+  s3:
+    directory: "./local/bucket"
+    port: 4569
+  serverless-offline-sns:
+    port: 4003
+  frontDomain:
+    prod: reserve
+    default: ${opt:stage}
+    local: reserve
+  subnet1:
+    prod: subnet-723d8a3a
+    default: subnet-cdaf7de6
+  subnet2:
+    prod: subnet-340fb11f
+    default: subnet-4c070217
+
+provider:
+  name: aws
+  runtime: nodejs12.x
+  region: ap-northeast-1
+  stage: ${opt:stage}
+  environment:
+    AWS_NODEJS_CONNECTION_REUSE_ENABLED: 1
+    STAGE: ${self:provider.stage}
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - cognito-idp:*
+      Resource: arn:aws:cognito-idp:*:*:*
+    - Effect: Allow
+      Action:
+        - dynamodb:Query
+        - dynamodb:Scan
+        - dynamodb:GetItem
+        - dynamodb:PutItem
+        - dynamodb:UpdateItem
+        - dynamodb:DeleteItem
+        - dynamodb:BatchGetItem
+        - dynamodb:BatchWriteItem
+      Resource:
+        - "arn:aws:dynamodb:${opt:region, self:provider.region}:*:table/*"
+        - "arn:aws:dynamodb:${opt:region, self:provider.region}:*:table/*/index/*"
+
+functions:
+  graphql:
+    handler: src/handler.graphql

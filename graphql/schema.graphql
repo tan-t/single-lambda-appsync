@@ -1,0 +1,8 @@
+type Query {
+  info: Composite
+}
+
+type Composite {
+  name: String
+  child: Composite
+}
